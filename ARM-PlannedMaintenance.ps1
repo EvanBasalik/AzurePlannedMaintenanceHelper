@@ -145,12 +145,29 @@
     }
 }
 
-Login-AzureRmAccount
+function CommaSubs (
+    [parameter(Mandatory=$true)][string]$inputFile)
+    {
+    $sublist = Get-Content -Path $inputFile
+    for ($i = 0; $i -lt $sublist.Count-1; $i++) {
+        $fulllist += $sublist[$i]
+        $fulllist += ","
+    }
+    
+    ##need to do the last one without a comma at the end
+    $fulllist += $sublist[$sublist.Count-1]
+    $fulllist |Out-File merged.txt -Force
+}
+
+#Login-AzureRmAccount
 
 #pull specific subs by subscription id in array format - comma separate values
-$subs=@("ffc213d1-279f-4d56-9578-392f27ba4e3d")
-ListARMVMMetaData -SubscriptionArray $subs
+#$subs=@("ffc213d1-279f-4d56-9578-392f27ba4e3d")
+#ListARMVMMetaData -SubscriptionArray $subs
 
 #pull subs based on what you have access to with optional array range parameter
-$subs = Get-AzureRmSubscription
-ListARMVMMetaData -SubscriptionArray $subs[0..2]
+#$subs = Get-AzureRmSubscription
+#ListARMVMMetaData -SubscriptionArray $subs[0..2]
+
+#CommaSubs "ListofMySubsOnePerLine.txt"
+
