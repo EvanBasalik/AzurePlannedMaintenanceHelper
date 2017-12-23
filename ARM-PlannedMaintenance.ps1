@@ -73,20 +73,17 @@
                     $niccount=0
                     foreach ($nic in $vmMetaData.NetworkProfile.NetworkInterfaces) {
                         $niccounter +=1
-                        $nic=Get-AzureRmNetworkInterface -ResourceGroupName $rg.ResourceGroupName -Name $vmMetaData.NetworkProfile.NetworkInterfaces
-                        $newVM | Add-Member -MemberType NoteProperty -Name "NICName$($niccounter)" -Value $nic.id.Split("/")[$nic.id.Split("/").Length-1]
+                        $nicinternal=Get-AzureRmNetworkInterface -ResourceGroupName $rg.ResourceGroupName -Name $nic.id.Split("/")[$nic.id.Split("/").Length-1]
+                        $newVM | Add-Member -MemberType NoteProperty -Name "NIC$($niccounter)Name" -Value $nicinternal.Name
                         
                         ##Now, for each NIC, loop through the ipconfigs
                         $ipconfigcounter=0
-                        foreach ($ipconfig in $nic.IpConfigurations) {
+                        foreach ($ipconfig in $nicinternal.IpConfigurations) {
                             $ipconfigcounter +=1
-                            $newVM | Add-Member -MemberType NoteProperty -Name "ipconfigName$($ipconfigcounter)" -Value $ipconfig.Name
+                            $newVM | Add-Member -MemberType NoteProperty -Name "ipconfig$($ipconfigcounter)Name" -Value $ipconfig.Name
                             $newVM | Add-Member -MemberType NoteProperty -Name "IPAllocationType" -Value $ipconfig.PrivateIpAllocationMethod
                         }
                     }
-  
-                    $newVM | Add-Member -MemberType NoteProperty -Name "InternalIPType" -Value $vmMetaData.StorageProfile.ImageReference.Sku
-                    foreach($ipconfig in $nic.IpConfigurations){write-host $ipconfig.name}
 
                     #start av set check
                     $avsetReferenceFound = $false
