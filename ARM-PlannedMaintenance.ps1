@@ -2,6 +2,8 @@
     [parameter(Mandatory=$true)][string[]]$SubscriptionArray) 
 {
 
+    Login-AzureRmAccount
+
     ##define array to hold the evaluated VMs
     [array]$VMs = @()
     $today=Get-Date
@@ -66,6 +68,22 @@
                         $newVM | Add-Member -MemberType NoteProperty -Name "IsManagedDisk" -Value $false
                     }
 
+                    ##Get the NIC information
+                    ##First, loop through all the NICs
+                    $niccount=0
+                    foreach ($nic in $vmMetaData.NetworkProfile.NetworkInterfaces) {
+                        $niccounter +=1
+                        $nicinternal=Get-AzureRmNetworkInterface -ResourceGroupName $rg.ResourceGroupName -Name $nic.id.Split("/")[$nic.id.Split("/").Length-1]
+                        $newVM | Add-Member -MemberType NoteProperty -Name "NIC$($niccounter)Name" -Value $nicinternal.Name
+                        
+                        ##Now, for each NIC, loop through the ipconfigs
+                        $ipconfigcounter=0
+                        foreach ($ipconfig in $nicinternal.IpConfigurations) {
+                            $ipconfigcounter +=1
+                            $newVM | Add-Member -MemberType NoteProperty -Name "ipconfig$($ipconfigcounter)Name" -Value $ipconfig.Name
+                            $newVM | Add-Member -MemberType NoteProperty -Name "IPAllocationType" -Value $ipconfig.PrivateIpAllocationMethod
+                        }
+                    }
 
                     #start av set check
                     $avsetReferenceFound = $false
@@ -162,8 +180,8 @@ function CommaSubs (
 #Login-AzureRmAccount
 
 #pull specific subs by subscription id in array format - comma separate values
-#$subs=@("ffc213d1-279f-4d56-9578-392f27ba4e3d")
-#ListARMVMMetaData -SubscriptionArray $subs
+$subs=@("27b2ee0a-4093-4253-95b5-c595487ad66f")
+ListARMVMMetaData -SubscriptionArray $subs
 
 #pull subs based on what you have access to with optional array range parameter
 #$subs = Get-AzureRmSubscription
