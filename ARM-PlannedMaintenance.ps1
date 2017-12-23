@@ -135,7 +135,6 @@
                     }
                     #end maintenance properties
 
-
                     $VMs += $newVM
 
                     ##Write-Output "Status $($vmStatus)"
@@ -180,8 +179,8 @@ function CommaSubs (
 #Login-AzureRmAccount
 
 #pull specific subs by subscription id in array format - comma separate values
-$subs=@("27b2ee0a-4093-4253-95b5-c595487ad66f")
-ListARMVMMetaData -SubscriptionArray $subs
+#$subs=@("yoursubhere")
+#ListARMVMMetaData -SubscriptionArray $subs
 
 #pull subs based on what you have access to with optional array range parameter
 #$subs = Get-AzureRmSubscription
