@@ -10,6 +10,11 @@
 #If passed, converts any detected dynamic private IPs into static private IPs
 #
 #.EXAMPLE
+#MySubs.txt is a list of subs, one per line
+#[array]$subs=Get-Content -Path "MySubs.txt"
+#ListARMVMMetaData -SubscriptionArray $
+#
+#.EXAMPLE
 #Takes the array and get various pieces of VM data plus converts any dynamic private IPs to static private IPs
 #$subs=@("YourSubsHere")
 #ListARMVMMetaData -SubscriptionArray $subs -ConvertDynamicPrivateIPstoStatic
@@ -24,7 +29,16 @@
 #ListARMVMMetaData -SubscriptionArray $subs[0..2]
 #
 #.NOTES
-#General notes
+#Sample scripts are not supported under any Microsoft standard support program or service. 
+#The sample scripts are provided AS IS without warranty of any kind. Microsoft disclaims all 
+#implied warranties including, without limitation, any implied warranties of merchantability
+#or of fitness for a particular purpose. The entire risk arising out of the use or performance
+#of the sample scripts and documentation remains with you. In no event shall Microsoft, its 
+#authors, or anyone else involved in the creation, production, or delivery of the scripts be 
+#liable for any damages whatsoever (including, without limitation, damages for loss of business
+#profits, business interruption, loss of business information, or other pecuniary loss) arising
+#out of the use of or inability to use the sample scripts or documentation, even if Microsoft 
+#has been advised of the possibility of such damages.
 ##############################
 function ListARMVMMetaData (
     [parameter(Mandatory=$true)][string[]]$SubscriptionArray,
