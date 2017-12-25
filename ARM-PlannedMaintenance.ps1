@@ -18,6 +18,11 @@
 #Takes the array and get various pieces of VM data
 #ListARMVMMetaData -SubscriptionArray $subs
 #
+#.EXAMPLE
+#Gets all the subs to which you have access
+#$subs = Get-AzureRmSubscription
+#ListARMVMMetaData -SubscriptionArray $subs[0..2]
+#
 #.NOTES
 #General notes
 ##############################
