@@ -268,7 +268,7 @@ function ConvertPrivateIPConfigtoStatic (
     Write-Host "Converted $($NICName) to Static" -ForegroundColor Green
 }
 
-#pull specific subs by subscription id in array format - comma separate values
-#$subs=@("YourSubsHere")
-#ListARMVMMetaData -SubscriptionArray $subs
+#MySubs.txt is a list of subs, one per line
+[array]$subs=Get-Content -Path "MySubs.txt"
+ListARMVMMetaData -SubscriptionArray $subs
 
