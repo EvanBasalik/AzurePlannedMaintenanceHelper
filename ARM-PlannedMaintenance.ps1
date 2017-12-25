@@ -271,11 +271,5 @@ function ConvertPrivateIPConfigtoStatic (
 
 #pull specific subs by subscription id in array format - comma separate values
 #$subs=@("YourSubsHere")
-#ListARMVMMetaData -SubscriptionArray $subs -ConvertDynamicPrivateIPstoStatic
-
-#pull subs based on what you have access to with optional array range parameter
-#$subs = Get-AzureRmSubscription
-#ListARMVMMetaData -SubscriptionArray $subs[0..2]
-
-#CommaSubs "ListofMySubsOnePerLine.txt"
+#ListARMVMMetaData -SubscriptionArray $subs
 
