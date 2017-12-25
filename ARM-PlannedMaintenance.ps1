@@ -184,7 +184,6 @@ function ListARMVMMetaData (
                     }
                     #end maintenance properties
 
-
                     $VMs += $newVM
 
                     ##Write-Output "Status $($vmStatus)"
