@@ -1,4 +1,27 @@
-﻿function ListARMVMMetaData (
+﻿##############################
+#.SYNOPSIS
+#Given one or more subscriptions, iterates through all the IaaS VMs in the subscription
+#and pull various pieces of metadata from which it creates a CSV for easy analysis
+#
+#.PARAMETER SubscriptionArray
+#Comma-separated list of subscriptions
+#
+#.PARAMETER ConvertDynamicPrivateIPstoStatic
+#If passed, converts any detected dynamic private IPs into static private IPs
+#
+#.EXAMPLE
+#Takes the array and get various pieces of VM data plus converts any dynamic private IPs to static private IPs
+#$subs=@("YourSubsHere")
+#ListARMVMMetaData -SubscriptionArray $subs -ConvertDynamicPrivateIPstoStatic
+#
+#.EXAMPLE
+#Takes the array and get various pieces of VM data
+#ListARMVMMetaData -SubscriptionArray $subs
+#
+#.NOTES
+#General notes
+##############################
+function ListARMVMMetaData (
     [parameter(Mandatory=$true)][string[]]$SubscriptionArray,
     [parameter(Mandatory=$false)][switch]$ConvertDynamicPrivateIPstoStatic
     ) 
@@ -99,7 +122,7 @@
                             {
                                 Write-Host "$($ipconfig.Name) for $($nicinternal.Name) is Dynamic" -ForegroundColor Red
                                 if ($ConvertDynamicPrivateIPstoStatic) {
-                                    ConvertPrivateIPConfigtoStatic ($nicinternal.Name, $nicinternal.ResourceGroupName, $nicinternal.IpConfigurations.IndexOf($ipconfig))
+                                    ConvertPrivateIPConfigtoStatic -NICName $nicinternal.Name -NICResourceGroup $nicinternal.ResourceGroupName -ipconfigIdx $nicinternal.IpConfigurations.IndexOf($ipconfig)
                                 }
                             }
                         }
@@ -184,6 +207,19 @@
     }
 }
 
+##############################
+#.SYNOPSIS
+#Converts a file consisting of a list of subscriptions (one per line) into a comma-separated list
+#
+#.PARAMETER inputFile
+#File that contains the list of subscriptions (one per line)
+#
+#.EXAMPLE
+#CommaSubs -inputFile MySubscriptionList
+#
+#.NOTES
+#Most outputs of Azure subscriptions list them once per line, but most cmdlets want an array
+##############################
 function CommaSubs (
     [parameter(Mandatory=$true)][string]$inputFile)
     {
@@ -198,6 +234,23 @@ function CommaSubs (
     $fulllist |Out-File merged.txt -Force
 }
 
+##############################
+#.SYNOPSIS
+#Converts the specified ipconfiguration from dynamic to static
+#
+#.PARAMETER NICName
+#Name of the NIC which has the ipconfiguration which needs to be converted to static
+#
+#.PARAMETER NICResourceGroup
+#Resource group of the NIC which has the ipconfiguration which needs to be converted to static
+#
+#.PARAMETER ipconfigIdx
+#In the arrary of ipconfigs for the NIC, the index of the one to be converted
+#
+#.EXAMPLE
+#ConvertPrivateIPConfigtoStatic -NICName myNIC -NICResourceGroup MyResourceGroup -ipconfigIdx 0 (most NICs will have one ipconfg)
+#
+##############################
 function ConvertPrivateIPConfigtoStatic (
     [parameter(Mandatory=$true)][string]$NICName,
     [parameter(Mandatory=$true)][string]$NICResourceGroup,
@@ -211,11 +264,9 @@ function ConvertPrivateIPConfigtoStatic (
     Write-Host "Converted $($NICName) to Static" -ForegroundColor Green
 }
 
-#Login-AzureRmAccount
-
 #pull specific subs by subscription id in array format - comma separate values
-$subs=@("27b2ee0a-4093-4253-95b5-c595487ad66f")
-ListARMVMMetaData -SubscriptionArray $subs -ConvertDynamicPrivateIPstoStatic
+#$subs=@("YourSubsHere")
+#ListARMVMMetaData -SubscriptionArray $subs -ConvertDynamicPrivateIPstoStatic
 
 #pull subs based on what you have access to with optional array range parameter
 #$subs = Get-AzureRmSubscription
