@@ -1,8 +1,42 @@
-﻿function ListARMVMMetaData (
-    [parameter(Mandatory=$true)][string[]]$SubscriptionArray) 
+﻿##############################
+#.SYNOPSIS
+#Given one or more subscriptions, iterates through all the IaaS VMs in the subscription
+#and pull various pieces of metadata from which it creates a CSV for easy analysis
+#
+#.PARAMETER SubscriptionArray
+#Comma-separated list of subscriptions
+#
+#.PARAMETER ConvertDynamicPrivateIPstoStatic
+#If passed, converts any detected dynamic private IPs into static private IPs
+#
+#.EXAMPLE
+#Takes the array and get various pieces of VM data plus converts any dynamic private IPs to static private IPs
+#$subs=@("YourSubsHere")
+#ListARMVMMetaData -SubscriptionArray $subs -ConvertDynamicPrivateIPstoStatic
+#
+#.EXAMPLE
+#Takes the array and get various pieces of VM data
+#ListARMVMMetaData -SubscriptionArray $subs
+#
+#.EXAMPLE
+#Gets all the subs to which you have access
+#$subs = Get-AzureRmSubscription
+#ListARMVMMetaData -SubscriptionArray $subs[0..2]
+#
+#.NOTES
+#General notes
+##############################
+function ListARMVMMetaData (
+    [parameter(Mandatory=$true)][string[]]$SubscriptionArray,
+    [parameter(Mandatory=$false)][switch]$ConvertDynamicPrivateIPstoStatic
+    ) 
 {
 
-    Login-AzureRmAccount
+    #check if we need to log in
+    $context =  Get-AzureRmContext
+    if ($context.Environment -eq $null) {
+        Login-AzureRmAccount
+    }
 
     ##define array to hold the evaluated VMs
     [array]$VMs = @()
@@ -57,9 +91,11 @@
                     Write-Output "Evaluating VM: $($vmStatus.Name)"
 
                     ##Get the image name
+                    Write-Host "Getting image information" -ForegroundColor Yellow
                     $newVM | Add-Member -MemberType NoteProperty -Name "ImagePublisher" -Value $vmMetaData.StorageProfile.ImageReference.Publisher
                     $newVM | Add-Member -MemberType NoteProperty -Name "ImageSKU" -Value $vmMetaData.StorageProfile.ImageReference.Sku
 
+                    Write-Host "Getting disk type" -ForegroundColor Yellow
                     if ($vmMetaData.storageprofile.OsDisk.ManagedDisk -ne $null) 
                     {
                         $newVM | Add-Member -MemberType NoteProperty -Name "IsManagedDisk" -Value $true
@@ -70,6 +106,7 @@
 
                     ##Get the NIC information
                     ##First, loop through all the NICs
+                    Write-Host "Getting NIC and IPConfig information" -ForegroundColor Yellow
                     $niccount=0
                     foreach ($nic in $vmMetaData.NetworkProfile.NetworkInterfaces) {
                         $niccounter +=1
@@ -81,11 +118,23 @@
                         foreach ($ipconfig in $nicinternal.IpConfigurations) {
                             $ipconfigcounter +=1
                             $newVM | Add-Member -MemberType NoteProperty -Name "ipconfig$($ipconfigcounter)Name" -Value $ipconfig.Name
-                            $newVM | Add-Member -MemberType NoteProperty -Name "IPAllocationType" -Value $ipconfig.PrivateIpAllocationMethod
+                            $newVM | Add-Member -MemberType NoteProperty -Name "ipconfig$($ipconfigcounter)IPAllocationType" -Value $ipconfig.PrivateIpAllocationMethod
+                            $newVM | Add-Member -MemberType NoteProperty -Name "ipconfig$($ipconfigcounter)PrivateIPAddress" -Value $ipconfig.PrivateIpAddress
+
+                            #if PrivateIpAllocationMethod=Dynamic and $ConvertDynamicPrivateIPstoStatic=$true
+                            #then convert to Static
+                            if ($ipconfig.PrivateIpAllocationMethod -eq "Dynamic")
+                            {
+                                Write-Host "$($ipconfig.Name) for $($nicinternal.Name) is Dynamic" -ForegroundColor Red
+                                if ($ConvertDynamicPrivateIPstoStatic) {
+                                    ConvertPrivateIPConfigtoStatic -NICName $nicinternal.Name -NICResourceGroup $nicinternal.ResourceGroupName -ipconfigIdx $nicinternal.IpConfigurations.IndexOf($ipconfig)
+                                }
+                            }
                         }
                     }
 
                     #start av set check
+                    Write-Host "Checking Availability Sets" -ForegroundColor Yellow
                     $avsetReferenceFound = $false
 
                     foreach($avset in $avsets){
@@ -116,7 +165,7 @@
                     #end check for sql match
 
                     #maintenance properties
-                   
+                    Write-Host "Checking Maintenance status" -ForegroundColor Yellow
                     if ($vmStatus.MaintenanceRedeployStatus -ne $null){
                         $newVM | Add-Member -MemberType NoteProperty -Name 'IsCustomerInitiatedMaintenanceAllowed' -Value $vmStatus.MaintenanceRedeployStatus.IsCustomerInitiatedMaintenanceAllowed
                         $newVM | Add-Member -MemberType NoteProperty -Name 'PreMaintenanceWindowStartTime' -Value $vmStatus.MaintenanceRedeployStatus.PreMaintenanceWindowStartTime
@@ -162,6 +211,19 @@
     }
 }
 
+##############################
+#.SYNOPSIS
+#Converts a file consisting of a list of subscriptions (one per line) into a comma-separated list
+#
+#.PARAMETER inputFile
+#File that contains the list of subscriptions (one per line)
+#
+#.EXAMPLE
+#CommaSubs -inputFile MySubscriptionList
+#
+#.NOTES
+#Most outputs of Azure subscriptions list them once per line, but most cmdlets want an array
+##############################
 function CommaSubs (
     [parameter(Mandatory=$true)][string]$inputFile)
     {
@@ -176,15 +238,37 @@ function CommaSubs (
     $fulllist |Out-File merged.txt -Force
 }
 
-#Login-AzureRmAccount
+##############################
+#.SYNOPSIS
+#Converts the specified ipconfiguration from dynamic to static
+#
+#.PARAMETER NICName
+#Name of the NIC which has the ipconfiguration which needs to be converted to static
+#
+#.PARAMETER NICResourceGroup
+#Resource group of the NIC which has the ipconfiguration which needs to be converted to static
+#
+#.PARAMETER ipconfigIdx
+#In the arrary of ipconfigs for the NIC, the index of the one to be converted
+#
+#.EXAMPLE
+#ConvertPrivateIPConfigtoStatic -NICName myNIC -NICResourceGroup MyResourceGroup -ipconfigIdx 0 (most NICs will have one ipconfg)
+#
+##############################
+function ConvertPrivateIPConfigtoStatic (
+    [parameter(Mandatory=$true)][string]$NICName,
+    [parameter(Mandatory=$true)][string]$NICResourceGroup,
+    [parameter(Mandatory=$true)][int]$ipconfigIdx
+    ) 
+{
+    Write-Host "Converting $($NICName) to Static" -ForegroundColor Yellow
+    $nic = Get-AzureRmNetworkInterface -ResourceGroupName $NICResourceGroup -Name $NICName
+    $nic.IpConfigurations[$ipconfigIdx].PrivateIpAllocationMethod = "Static"
+    Set-AzureRmNetworkInterface -NetworkInterface $nic 
+    Write-Host "Converted $($NICName) to Static" -ForegroundColor Green
+}
 
 #pull specific subs by subscription id in array format - comma separate values
-#$subs=@("yoursubhere")
+#$subs=@("YourSubsHere")
 #ListARMVMMetaData -SubscriptionArray $subs
-
-#pull subs based on what you have access to with optional array range parameter
-#$subs = Get-AzureRmSubscription
-#ListARMVMMetaData -SubscriptionArray $subs[0..2]
-
-#CommaSubs "ListofMySubsOnePerLine.txt"
 
