@@ -100,6 +100,7 @@ function ListARMVMMetaData (
 
                     $vm = $vmList[$vmIdx]
                     $newVM | Add-Member -MemberType NoteProperty -Name "Name" -Value $vm.Name
+                    $newVM | Add-Member -MemberType NoteProperty -Name "ResourceGroup" -Value $rg.ResourceGroupName
 
                     $vmStatus = Get-AzureRMVM -ResourceGroupName $rg.ResourceGroupName -Name $vm.Name -Status
                     $vmMetaData = Get-AzureRMVM -ResourceGroupName $rg.ResourceGroupName -Name $vm.Name
@@ -280,7 +281,77 @@ function ConvertPrivateIPConfigtoStatic (
     Write-Host "Converted $($NICName) to Static" -ForegroundColor Green
 }
 
+##############################
+#.SYNOPSIS
+#Start, stop, or performance maintenance in parallel
+#
+#.PARAMETER VMArray
+#Array of VMs against which the bulk operation will be run
+#
+#.PARAMETER doStopDeallocate
+#Stop all the VMs
+#
+#.PARAMETER doStart
+#Start all the VMs
+#
+#.PARAMETER doMaintenance
+#Performance maintenance for all the VMs
+#
+#.EXAMPLE
+#An example
+#
+workflow StartBulkOperation {
+    param (
+        [parameter(Mandatory=$true)][string[]]$VMArray,
+        [parameter(Mandatory=$true, ParameterSetName="StopDeallocate")][switch]$doStopDeallocate,
+        [parameter(Mandatory=$true, ParameterSetName="Start")][switch]$doStart,
+        [parameter(Mandatory=$true, ParameterSetName="Maintenance")][switch]$doMaintenance
+    )
+    
+    [array]$VMs = @()
+    foreach -parallel ($VM in $VMArray) {
+
+        ##object to hold the VM properties
+        $VM = New-Object psobject
+        $VM | Add-Member -MemberType NoteProperty -Name 'Name' -Value $VM.Name
+        $VM | Add-Member -MemberType NoteProperty -Name 'ResourceGroup' -Value $VM.ResourceGroup
+
+        if ($doStopDeallocate) {
+            Stop-AzureRmVM -ResourceGroupName $VM.ResourceGroup -Name $VM.Name
+            $VM | Add-Member -MemberType NoteProperty -Name 'Operation' -Value "StopDeallocate"
+        }
+        if ($doStart) {
+            Start-AzureRmVM -ResourceGroupName $VM.ResourceGroup -Name $VM.Name
+            $VM | Add-Member -MemberType NoteProperty -Name 'Operation' -Value "Start"
+        }
+        if ($doMaintenance) {
+            Restart-AzureRmVM -PerformMaintenance -ResourceGroupName $VM.ResourceGroup -Name $VM.Name
+            $VM | Add-Member -MemberType NoteProperty -Name 'Operation' -Value "PerformMaintenance"
+        }
+    }
+
+    try {
+        $dt="$($today.Month)-$($today.Day)-$($today.Hour)$($today.Minute)$($today.Second)"
+        $VMCSV = $directory + "\" + $subscription.Name + '-' + $subscription.Id + "-$($dt).csv"
+
+        ##export the updates for VM information
+        Write-Host "Exporting VM data to CSV" 
+        $VMs | Export-Csv $VMCSV -notypeinformation
+        Write-Host "Exported VM data to $($VMCSV)" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "Unable to export CSV" -ForegroundColor Red
+        Exit
+    }
+    
+}
+
 #MySubs.txt is a list of subs, one per line
 [array]$subs=Get-Content -Path "MySubs.txt"
-ListARMVMMetaData -SubscriptionArray $subs -SingleFileOutput
+#ListARMVMMetaData -SubscriptionArray $subs -SingleFileOutput
+
+[array]$VMs=Get-Content -Path "C:\AzurePlannedMaintenance\MyVMs.csv"
+StartBulkOperation -VMArray $VMs -doStopDeallocate
+#StartBulkOperation -VMArray $VMs -doStart
+#StartBulkOperation -VMArray $VMs -doMaintenance
 
