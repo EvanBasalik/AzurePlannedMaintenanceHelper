@@ -42,6 +42,7 @@
 ##############################
 function ListARMVMMetaData (
     [parameter(Mandatory=$true)][string[]]$SubscriptionArray,
+    [parameter(Mandatory=$false)][switch]$SingleFileOutput,
     [parameter(Mandatory=$false)][switch]$ConvertDynamicPrivateIPstoStatic
     ) 
 {
@@ -189,12 +190,7 @@ function ListARMVMMetaData (
                         $newVM | Add-Member -MemberType NoteProperty -Name 'LastOperationResultCode' -Value $vmStatus.MaintenanceRedeployStatus.LastOperationResultCode
                     }
                     else{
-                        $newVM | Add-Member -MemberType NoteProperty -Name 'IsCustomerInitiatedMaintenanceAllowed' "N/A - Rerun Jan 2 2018"
-                        $newVM | Add-Member -MemberType NoteProperty -Name 'PreMaintenanceWindowStartTime' -Value $vmStatus.MaintenanceRedeployStatus.PreMaintenanceWindowStartTime
-                        $newVM | Add-Member -MemberType NoteProperty -Name 'PreMaintenanceWindowEndTime' -Value $vmStatus.MaintenanceRedeployStatus.PreMaintenanceWindowEndTime
-                        $newVM | Add-Member -MemberType NoteProperty -Name 'MaintenanceWindowStartTime' -Value $vmStatus.MaintenanceRedeployStatus.MaintenanceWindowStartTime
-                        $newVM | Add-Member -MemberType NoteProperty -Name 'MaintenanceWindowEndTime' -Value $vmStatus.MaintenanceRedeployStatus.MaintenanceWindowEndTime
-                        $newVM | Add-Member -MemberType NoteProperty -Name 'LastOperationResultCode' -Value $vmStatus.MaintenanceRedeployStatus.LastOperationResultCode
+                        $newVM | Add-Member -MemberType NoteProperty -Name 'IsCustomerInitiatedMaintenanceAllowed' -Value "N/A - VM is likely deallocated"
                     }
                     #end maintenance properties
 
@@ -206,15 +202,17 @@ function ListARMVMMetaData (
             }
 
             try {
-                $VMCSV = $directory + "\" + $subscription.Name + '-' + $subscription.Id + ".csv"
-                ##export the updates for VM information
-                Write-Host "Exporting VMs to CSV" 
-                if (Test-Path -Path $VMCSV)
-                {
-                    Remove-Item $VMCSV
+                $dt="$($today.Month)-$($today.Day)-$($today.Hour)$($today.Minute)$($today.Second)"
+                if ($SingleFileOutput) {
+                    $VMCSV = $directory + "\" + "AllSubscriptions-$($dt).csv"
                 }
-                $VMs | Export-Csv $VMCSV -notypeinformation
-                Write-Host "Exported topic updates to $($VMCSV)" -ForegroundColor Green
+                else {
+                    $VMCSV = $directory + "\" + $subscription.Name + '-' + $subscription.Id + "-$($dt).csv"
+                }
+                ##export the updates for VM information
+                Write-Host "Exporting VM data to CSV" 
+                $VMs | Export-Csv $VMCSV -notypeinformation -Append
+                Write-Host "Exported VM data to $($VMCSV)" -ForegroundColor Green
             }
             catch {
                 Write-Host "Unable to export CSV" -ForegroundColor Red
@@ -284,5 +282,5 @@ function ConvertPrivateIPConfigtoStatic (
 
 #MySubs.txt is a list of subs, one per line
 [array]$subs=Get-Content -Path "MySubs.txt"
-ListARMVMMetaData -SubscriptionArray $subs
+ListARMVMMetaData -SubscriptionArray $subs -SingleFileOutput
 
