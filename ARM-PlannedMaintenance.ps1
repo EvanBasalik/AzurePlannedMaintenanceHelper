@@ -42,6 +42,7 @@
 ##############################
 function ListARMVMMetaData (
     [parameter(Mandatory=$true)][string[]]$SubscriptionArray,
+    [parameter(Mandatory=$false)][switch]$SingleFileOutput,
     [parameter(Mandatory=$false)][switch]$ConvertDynamicPrivateIPstoStatic
     ) 
 {
@@ -99,6 +100,7 @@ function ListARMVMMetaData (
 
                     $vm = $vmList[$vmIdx]
                     $newVM | Add-Member -MemberType NoteProperty -Name "Name" -Value $vm.Name
+                    $newVM | Add-Member -MemberType NoteProperty -Name "ResourceGroup" -Value $rg.ResourceGroupName
 
                     $vmStatus = Get-AzureRMVM -ResourceGroupName $rg.ResourceGroupName -Name $vm.Name -Status
                     $vmMetaData = Get-AzureRMVM -ResourceGroupName $rg.ResourceGroupName -Name $vm.Name
@@ -189,12 +191,7 @@ function ListARMVMMetaData (
                         $newVM | Add-Member -MemberType NoteProperty -Name 'LastOperationResultCode' -Value $vmStatus.MaintenanceRedeployStatus.LastOperationResultCode
                     }
                     else{
-                        $newVM | Add-Member -MemberType NoteProperty -Name 'IsCustomerInitiatedMaintenanceAllowed' "N/A - Rerun Jan 2 2018"
-                        $newVM | Add-Member -MemberType NoteProperty -Name 'PreMaintenanceWindowStartTime' -Value $vmStatus.MaintenanceRedeployStatus.PreMaintenanceWindowStartTime
-                        $newVM | Add-Member -MemberType NoteProperty -Name 'PreMaintenanceWindowEndTime' -Value $vmStatus.MaintenanceRedeployStatus.PreMaintenanceWindowEndTime
-                        $newVM | Add-Member -MemberType NoteProperty -Name 'MaintenanceWindowStartTime' -Value $vmStatus.MaintenanceRedeployStatus.MaintenanceWindowStartTime
-                        $newVM | Add-Member -MemberType NoteProperty -Name 'MaintenanceWindowEndTime' -Value $vmStatus.MaintenanceRedeployStatus.MaintenanceWindowEndTime
-                        $newVM | Add-Member -MemberType NoteProperty -Name 'LastOperationResultCode' -Value $vmStatus.MaintenanceRedeployStatus.LastOperationResultCode
+                        $newVM | Add-Member -MemberType NoteProperty -Name 'IsCustomerInitiatedMaintenanceAllowed' -Value "N/A - VM is likely deallocated"
                     }
                     #end maintenance properties
 
@@ -206,15 +203,17 @@ function ListARMVMMetaData (
             }
 
             try {
-                $VMCSV = $directory + "\" + $subscription.Name + '-' + $subscription.Id + ".csv"
-                ##export the updates for VM information
-                Write-Host "Exporting VMs to CSV" 
-                if (Test-Path -Path $VMCSV)
-                {
-                    Remove-Item $VMCSV
+                $dt="$($today.Month)-$($today.Day)-$($today.Hour)$($today.Minute)$($today.Second)"
+                if ($SingleFileOutput) {
+                    $VMCSV = $directory + "\" + "AllSubscriptions-$($dt).csv"
                 }
-                $VMs | Export-Csv $VMCSV -notypeinformation
-                Write-Host "Exported topic updates to $($VMCSV)" -ForegroundColor Green
+                else {
+                    $VMCSV = $directory + "\" + $subscription.Name + '-' + $subscription.Id + "-$($dt).csv"
+                }
+                ##export the updates for VM information
+                Write-Host "Exporting VM data to CSV" 
+                $VMs | Export-Csv $VMCSV -notypeinformation -Append
+                Write-Host "Exported VM data to $($VMCSV)" -ForegroundColor Green
             }
             catch {
                 Write-Host "Unable to export CSV" -ForegroundColor Red
@@ -282,7 +281,126 @@ function ConvertPrivateIPConfigtoStatic (
     Write-Host "Converted $($NICName) to Static" -ForegroundColor Green
 }
 
+##############################
+#.SYNOPSIS
+#Start, stop, or performance maintenance in parallel
+#
+#.PARAMETER VMArray
+#Array of VMs against which the bulk operation will be run
+#
+#.PARAMETER doStopDeallocate
+#Stop all the VMs
+#
+#.PARAMETER doStart
+#Start all the VMs
+#
+#.PARAMETER doMaintenance
+#Performance maintenance for all the VMs
+#
+#.EXAMPLE
+#MyVMs is a CSV with at least the columns Name and ResourceGroup
+#Typical expected input is what is output from ListARMVMMetaData
+#[array]$VMs=Import-Csv -Path "MyVMs.csv"
+#StartBulkOperation -VMArray $VMs -doStart
+#
+#[array]$VMs=Import-Csv -Path "MyVMs.csv"
+#StartBulkOperation -VMArray $VMs -doStop
+#
+#[array]$VMs=Import-Csv -Path "MyVMs.csv"
+#StartBulkOperation -VMArray $VMs -doMaintenance
+#
+function Start-BulkOperation {
+    param (
+        [parameter(Mandatory=$true)][array]$VMArray,
+        [parameter(Mandatory=$true, ParameterSetName="StopDeallocate")][switch]$doStopDeallocate,
+        [parameter(Mandatory=$true, ParameterSetName="Start")][switch]$doStart,
+        [parameter(Mandatory=$true, ParameterSetName="Maintenance")][switch]$doMaintenance
+    )
+    
+    $today=Get-Date
+    $directory = 'C:\AzurePlannedMaintenance\'
+
+    #check if we need to log in
+    $context =  Get-AzureRmContext
+    if ($context.Environment -eq $null) {
+        Login-AzureRmAccount
+    }
+
+    [array]$VMOperations = @()
+    ##don't need to run in parallel - we are using the newly added -AsJob parameter
+    ##newly released as per https://github.com/Azure/azure-powershell/issues/1200!!!!!
+    foreach ($VM in $VMArray) {
+
+            ##object to hold the VM properties
+            $VMOperation = New-Object psobject
+            $VMOperation | Add-Member -MemberType NoteProperty -Name "VMName" -Value $VM.Name
+            $VMOperation | Add-Member -MemberType NoteProperty -Name "ResourceGroup" -Value $VM.ResourceGroup
+
+            if ($doStopDeallocate) {
+                Write-Host "Stopping $($VM.Name)"
+                Stop-AzureRmVM -ResourceGroupName $VM.ResourceGroup -Name $VM.Name -Force -AsJob | Add-Member -MemberType NoteProperty -Name VMName -Value $VM.Name -PassThru
+                $VMOperation | Add-Member -MemberType NoteProperty -Name "Operation" -Value "StopDeallocate"
+            }
+            if ($doStart) {
+                Write-Host "Starting $($VM.Name)"
+                Start-AzureRmVM -ResourceGroupName $VM.ResourceGroup -Name $VM.Name -AsJob | Add-Member -MemberType NoteProperty -Name VMName -Value $VM.Name -PassThru
+                $VMOperation | Add-Member -MemberType NoteProperty -Name "Operation" -Value "Start"
+            }
+            if ($doMaintenance) {
+                Write-Host "Performing maintenance on $($VM.Name)"
+                Restart-AzureRmVM -PerformMaintenance -ResourceGroupName $VM.ResourceGroup -Name $VM.Name -AsJob | Add-Member -MemberType NoteProperty -Name VMName -Value $VM.Name -PassThru
+                $VMOperation | Add-Member -MemberType NoteProperty -Name "Operation" -Value "Maintenance"
+            }
+
+        $VMOperations += $VMOperation
+    }
+
+    #wait 5 minutes for the jobs to finish
+    #every 1 minutes, dump any jobs not done
+    for ($i = 0; $i -lt 20; $i++) {
+        $alldone=$true
+        foreach ($job in Get-Job) {
+            if ($job.State -eq "Running")
+            {
+                "Still doing bulk operation on $($job.VMName)"
+                $alldone = ($alldone -and $false)
+            }
+        }
+
+        #this is our exit criteria if everything finishes before 5 minutes
+        if (!$alldone)
+        {
+            Write-Host "Sleeping for 60 seconds"
+            Start-Sleep -Seconds 60
+        }
+    }
+
+    try {
+        $dt="$($today.Month)-$($today.Day)-$($today.Hour)$($today.Minute)$($today.Second)"
+        $VMCSV = $directory + "\" + "BulkOperations-$($dt).csv"
+
+        ##export the updates for VM information
+        $VMOperations | Export-Csv $VMCSV -notypeinformation
+        Write-Host "Wrote operations log to $($VMCSV)"
+    }
+    catch {
+        Exit
+    }
+
+    ##dump one more Get-Job, plus instructions
+    Write-Host "Run additional Get-Job commands to continue to track the status"
+    Get-Job | Where-Object {$_.State -eq 'Running'}
+    
+}
+
 #MySubs.txt is a list of subs, one per line
-[array]$subs=Get-Content -Path "MySubs.txt"
-ListARMVMMetaData -SubscriptionArray $subs
+#[array]$subs=Get-Content -Path "MySubs.txt"
+#ListARMVMMetaData -SubscriptionArray $subs -SingleFileOutput
+
+#MyVMs is a CSV with at least the columns Name and ResourceGroup
+#Typical expected input is what is output from ListARMVMMetaData
+#[array]$VMs=Import-Csv -Path "MyVMs.csv"
+#StartBulkOperation -VMArray $VMs -doStart
+#StartBulkOperation -VMArray $VMs -doStart
+#StartBulkOperation -VMArray $VMs -doMaintenance
 
