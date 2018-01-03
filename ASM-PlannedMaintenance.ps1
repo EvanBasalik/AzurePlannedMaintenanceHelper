@@ -79,7 +79,6 @@ function ListASMVMMetaData (
         Write-Output "Evaluating subscription $subName - $subId"
         
             $serviceList= Get-AzureVM | Group-Object -Property ServiceName 
-            $avsets = Get-AzureVM | Group-Object -Property $_.AvailabilitySetName
 
             for ($svIdx=0; $svIdx -lt $serviceList.Length ; $svIdx++)
             {
@@ -100,15 +99,14 @@ function ListASMVMMetaData (
                     $newVM | Add-Member -MemberType NoteProperty -Name "Name" -Value $vm.Name
                     $newVM | Add-Member -MemberType NoteProperty -Name "Service" -Value $sv.Name
 
-                    $vmStatus = Get-AzureVM -ServiceName $sv.Name -Name $vm.Name -Status
                     $vmMetaData = Get-AzureVM -ServiceName $sv.Name -Name $vm.Name
-                    Write-Output "Evaluating VM: $($vmStatus.Name)"
+                    Write-Output "Evaluating VM: $($vmMetaData.Name)"
 
                     ##Get the image name
                     Write-Host "Getting image information" -ForegroundColor Yellow
                     $newVM | Add-Member -MemberType NoteProperty -Name "ImagePublisher" -Value $vmMetaData.VM.OSVirtualHardDisk.OS
                     #split location
-                    $split=$vmMetaDatavm.VM.OSVirtualHardDisk.SourceImageName.IndexOf("__")+2
+                    $split=$vmMetaData.VM.OSVirtualHardDisk.SourceImageName.IndexOf("__")+2
                     $newVM | Add-Member -MemberType NoteProperty -Name "ImageOS" -Value $vmMetaData.VM.OSVirtualHardDisk.SourceImageName.Substring($split,$vmMetaData.VM.OSVirtualHardDisk.SourceImageName.length-$split).Replace(".vhd","")
 
                     ##Get the IP address
@@ -145,16 +143,16 @@ function ListASMVMMetaData (
 
                     #maintenance properties
                     Write-Host "Checking Maintenance status" -ForegroundColor Yellow
-                    if ($vmStatus.MaintenanceRedeployStatus -ne $null){
-                        $newVM | Add-Member -MemberType NoteProperty -Name 'IsCustomerInitiatedMaintenanceAllowed' -Value $vmStatus.MaintenanceRedeployStatus.IsCustomerInitiatedMaintenanceAllowed
-                        $newVM | Add-Member -MemberType NoteProperty -Name 'PreMaintenanceWindowStartTime' -Value $vmStatus.MaintenanceRedeployStatus.PreMaintenanceWindowStartTime
-                        $newVM | Add-Member -MemberType NoteProperty -Name 'PreMaintenanceWindowEndTime' -Value $vmStatus.MaintenanceRedeployStatus.PreMaintenanceWindowEndTime
-                        $newVM | Add-Member -MemberType NoteProperty -Name 'MaintenanceWindowStartTime' -Value $vmStatus.MaintenanceRedeployStatus.MaintenanceWindowStartTime
-                        $newVM | Add-Member -MemberType NoteProperty -Name 'MaintenanceWindowEndTime' -Value $vmStatus.MaintenanceRedeployStatus.MaintenanceWindowEndTime
-                        $newVM | Add-Member -MemberType NoteProperty -Name 'LastOperationResultCode' -Value $vmStatus.MaintenanceRedeployStatus.LastOperationResultCode
+                    if ($vm.MaintenanceStatus -ne $null){
+                        $newVM | Add-Member -MemberType NoteProperty -Name 'IsCustomerInitiatedMaintenanceAllowed' -Value $vmStatus.MaintenanceStatus.IsCustomerInitiatedMaintenanceAllowed
+                        $newVM | Add-Member -MemberType NoteProperty -Name 'PreMaintenanceWindowStartTime' -Value $vmStatus.MaintenanceStatus.PreMaintenanceWindowStartTime
+                        $newVM | Add-Member -MemberType NoteProperty -Name 'PreMaintenanceWindowEndTime' -Value $vmStatus.MaintenanceStatus.PreMaintenanceWindowEndTime
+                        $newVM | Add-Member -MemberType NoteProperty -Name 'MaintenanceWindowStartTime' -Value $vmStatus.MaintenanceStatus.MaintenanceWindowStartTime
+                        $newVM | Add-Member -MemberType NoteProperty -Name 'MaintenanceWindowEndTime' -Value $vmStatus.MaintenanceStatus.MaintenanceWindowEndTime
+                        $newVM | Add-Member -MemberType NoteProperty -Name 'LastOperationResultCode' -Value $vmStatus.MaintenanceStatus.LastOperationResultCode
                     }
                     else{
-                        $newVM | Add-Member -MemberType NoteProperty -Name 'IsCustomerInitiatedMaintenanceAllowed' -Value "N/A - VM is likely deallocated"
+                        $newVM | Add-Member -MemberType NoteProperty -Name 'IsCustomerInitiatedMaintenanceAllowed' -Value "VM doesn't need maintenance"
                     }
                     #end maintenance properties
 
@@ -168,10 +166,10 @@ function ListASMVMMetaData (
             try {
                 $dt="$($today.Month)-$($today.Day)-$($today.Hour)$($today.Minute)$($today.Second)"
                 if ($SingleFileOutput) {
-                    $VMCSV = $directory + "\" + "AllSubscriptions-$($dt).csv"
+                    $VMCSV = $directory + "AllSubscriptions-$($dt).csv"
                 }
                 else {
-                    $VMCSV = $directory + "\" + $subscription.Name + '-' + $subscription.Id + "-$($dt).csv"
+                    $VMCSV = $directory + $subscription.Name + '-' + $subscription.Id + "-$($dt).csv"
                 }
                 ##export the updates for VM information
                 Write-Host "Exporting VM data to CSV" 
@@ -186,3 +184,7 @@ function ListASMVMMetaData (
             $VMs = @()
     }
 }
+
+
+[array]$subs=Get-Content -Path "MySubs.txt"
+ListASMVMMetaData -SubscriptionArray $subs -SingleFileOutput
