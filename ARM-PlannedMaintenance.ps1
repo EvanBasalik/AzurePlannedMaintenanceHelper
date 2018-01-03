@@ -191,7 +191,7 @@ function ListARMVMMetaData (
                         $newVM | Add-Member -MemberType NoteProperty -Name 'LastOperationResultCode' -Value $vmStatus.MaintenanceRedeployStatus.LastOperationResultCode
                     }
                     else{
-                        $newVM | Add-Member -MemberType NoteProperty -Name 'IsCustomerInitiatedMaintenanceAllowed' -Value "VM doesn't need maintenance"
+                        $newVM | Add-Member -MemberType NoteProperty -Name 'IsCustomerInitiatedMaintenanceAllowed' -Value "Stopped or doesn't need maintenance"
                     }
                     #end maintenance properties
 

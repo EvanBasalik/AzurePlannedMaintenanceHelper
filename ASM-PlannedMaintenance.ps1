@@ -75,7 +75,7 @@ function ListASMVMMetaData (
         Write-Output ""
         Select-AzureSubscription -SubscriptionId $subId
         $subscription = Get-AzureSubscription -SubscriptionId $subId
-        $subName = $subscription.Name
+        $subName = $subscription.SubscriptionName
         Write-Output "Evaluating subscription $subName - $subId"
         
             $serviceList= Get-AzureVM | Group-Object -Property ServiceName 
@@ -92,8 +92,8 @@ function ListASMVMMetaData (
                     ##object to hold the VM properties
                     $newVM = New-Object psobject
 
-                    $newVM | Add-Member -MemberType NoteProperty -Name "SubscriptionName" -Value $subscription.Name
-                    $newVM | Add-Member -MemberType NoteProperty -Name "SubscriptionId" -Value $subscription.Id
+                    $newVM | Add-Member -MemberType NoteProperty -Name "SubscriptionName" -Value $subscription.SubscriptionName
+                    $newVM | Add-Member -MemberType NoteProperty -Name "SubscriptionId" -Value $subscription.SubscriptionId
 
                     $vm = $vmList[$vmIdx]
                     $newVM | Add-Member -MemberType NoteProperty -Name "Name" -Value $vm.Name
@@ -117,7 +117,7 @@ function ListASMVMMetaData (
 
                     #call out PIPs b/c there is no way to make them static
                     if ($vmMetaData.PublicIPAddress -ne $null) {
-                        Write-Host "WARNING! $($vmmetadata.Name) has a PIP. There is no way to do a STOP and preserve it"
+                        Write-Host "!!!WARNING! $($vmmetadata.Name) has a PIP. There is no way to do a STOP and preserve it!!!" -ForegroundColor Red
                         $newVM | Add-Member -MemberType NoteProperty -Name "HasPIP" -Value $true
                         $newVM | Add-Member -MemberType NoteProperty -Name "PIP" -Value $vmmetadata.PublicIPAddress
                     }
@@ -152,7 +152,7 @@ function ListASMVMMetaData (
                         $newVM | Add-Member -MemberType NoteProperty -Name 'LastOperationResultCode' -Value $vmStatus.MaintenanceStatus.LastOperationResultCode
                     }
                     else{
-                        $newVM | Add-Member -MemberType NoteProperty -Name 'IsCustomerInitiatedMaintenanceAllowed' -Value "VM doesn't need maintenance"
+                        $newVM | Add-Member -MemberType NoteProperty -Name 'IsCustomerInitiatedMaintenanceAllowed' -Value "Stopped or doesn't need maintenance"
                     }
                     #end maintenance properties
 
