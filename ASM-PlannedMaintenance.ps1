@@ -186,5 +186,5 @@ function ListASMVMMetaData (
 }
 
 
-[array]$subs=Get-Content -Path "MySubs.txt"
-ListASMVMMetaData -SubscriptionArray $subs -SingleFileOutput
+#[array]$subs=Get-Content -Path "MySubs.txt"
+#ListASMVMMetaData -SubscriptionArray $subs -SingleFileOutput
